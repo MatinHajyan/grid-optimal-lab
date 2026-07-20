@@ -49,6 +49,10 @@ python step01_base.py --random --seed 42
 
 # Visualize one hill in isolation (terrain tutorial)
 python step01_single_hill.py
+
+# Step 2: Ackermann (car-like) motion, same map and cost
+python step02_ackermann.py
+python step02_ackermann.py --gif          # animation of the car driving
 ```
 
 ## Outputs
@@ -62,6 +66,8 @@ Generated under `results/` (not committed — recreate with commands above):
 | `step01_proof.txt` | `--sharp-turns` |
 | `step01_single_hill.png` | `python step01_single_hill.py` |
 | `step01_spiral.gif` | `--gif` |
+| `step02_ackermann.png` | `python step02_ackermann.py` |
+| `step02_ackermann.gif` | `python step02_ackermann.py --gif` |
 
 ## Project structure
 
@@ -69,7 +75,9 @@ Generated under `results/` (not committed — recreate with commands above):
 grid-optimal-lab/
 ├── step01_base.py          # Step 1: map, Dijkstra, plots, fork proof
 ├── step01_single_hill.py   # One-hill terrain visualization
+├── step02_ackermann.py     # Step 2: Ackermann car (imports Step 1 map)
 ├── docs/STEP01_README.md   # Step 1 checklist
+├── docs/STEP02_README.md   # Step 2 checklist
 ├── requirements.txt
 └── results/                # gitignored — run scripts to generate
 ```
@@ -77,9 +85,10 @@ grid-optimal-lab/
 ## Roadmap
 
 - [x] **Step 1** — base grid, Dijkstra, 23 hills, turn modes, fork proof
-- [ ] **Step 2** — vertical wall obstacle
-- [ ] **Step 3** — max path length constraint
-- [ ] **Step 4** — direction / maneuver limits (partially done via turn angle)
+- [x] **Step 2** — Ackermann (car-like) motion: `(x, y, heading)` state, steering limit, vehicle footprint
+- [ ] **Step 3** — vertical wall obstacle (footprint collision already wired)
+- [ ] **Step 4** — max path length constraint
+- [ ] Multi-destination (several goals) — investigate
 - [ ] Real elevation data (e.g. Elbsandstein DEM)
 - [ ] Compare grid optimum vs continuous planners
 
