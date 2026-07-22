@@ -53,6 +53,10 @@ python step01_single_hill.py
 # Step 2: Ackermann (car-like) motion, same map and cost
 python step02_ackermann.py
 python step02_ackermann.py --gif          # animation of the car driving
+
+# Step 3: discretization study (compare resolution scales, grid fixed)
+python step03_discretization.py
+python step03_discretization.py --quick   # fast smoke test
 ```
 
 ## Outputs
@@ -68,6 +72,8 @@ Generated under `results/` (not committed — recreate with commands above):
 | `step01_spiral.gif` | `--gif` |
 | `step02_ackermann.png` | `python step02_ackermann.py` |
 | `step02_ackermann.gif` | `python step02_ackermann.py --gif` |
+| `step03_discretization.png` | `python step03_discretization.py` |
+| `step03_discretization.txt` | `python step03_discretization.py` |
 
 ## Project structure
 
@@ -76,8 +82,10 @@ grid-optimal-lab/
 ├── step01_base.py          # Step 1: map, Dijkstra, plots, fork proof
 ├── step01_single_hill.py   # One-hill terrain visualization
 ├── step02_ackermann.py     # Step 2: Ackermann car (imports Step 1 map)
+├── step03_discretization.py# Step 3: discretization comparison study
 ├── docs/STEP01_README.md   # Step 1 checklist
 ├── docs/STEP02_README.md   # Step 2 checklist
+├── docs/STEP03_README.md   # Step 3 checklist
 ├── requirements.txt
 └── results/                # gitignored — run scripts to generate
 ```
@@ -86,9 +94,11 @@ grid-optimal-lab/
 
 - [x] **Step 1** — base grid, Dijkstra, 23 hills, turn modes, fork proof
 - [x] **Step 2** — Ackermann (car-like) motion: `(x, y, heading)` state, steering limit, vehicle footprint
-- [ ] **Step 3** — vertical wall obstacle (footprint collision already wired)
-- [ ] **Step 4** — max path length constraint
+- [x] **Step 3** — discretization study: sweep headings/step/steering, fair convergence comparison (grid fixed)
+- [ ] **Step 4** — vertical wall obstacle (footprint collision already wired)
+- [ ] **Step 5** — max path length constraint
 - [ ] Multi-destination (several goals) — investigate
+- [ ] Grid-size (spatial) refinement
 - [ ] Real elevation data (e.g. Elbsandstein DEM)
 - [ ] Compare grid optimum vs continuous planners
 
