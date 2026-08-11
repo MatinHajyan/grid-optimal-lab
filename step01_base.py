@@ -73,17 +73,16 @@ def _step_moves(eight_connected: bool) -> tuple[tuple[int, int], ...]:
 
 
 def _turn_angle_deg(prev: tuple[int, int], new: tuple[int, int]) -> float:
-    """Angle between two grid steps (degrees). prev=(0,0) means 'from start'."""
-    if prev == NO_PREV:
+    """Angle between two grid steps (degrees). prev=(0,0) means 'from start'.
+
+    Must not be computed as acos of a normalised dot product: acos loses
+    precision near 0 deg, enough that two identical diagonal steps register as
+    a 1.2e-6 deg turn and get rejected by a 0 deg turn limit.
+    """
+    if prev == NO_PREV or new == NO_PREV:
         return 0.0
-    pdc, pdr = prev
-    ndc, ndr = new
-    dot = pdc * ndc + pdr * ndr
-    mag = math.hypot(pdc, pdr) * math.hypot(ndc, ndr)
-    if mag == 0:
-        return 0.0
-    cos_a = max(-1.0, min(1.0, dot / mag))
-    return math.degrees(math.acos(cos_a))
+    delta = math.atan2(new[1], new[0]) - math.atan2(prev[1], prev[0])
+    return abs(math.degrees((delta + math.pi) % (2.0 * math.pi) - math.pi))
 
 
 def count_sharp_turns(path: list[tuple[int, int]], max_ok_deg: float) -> int:
