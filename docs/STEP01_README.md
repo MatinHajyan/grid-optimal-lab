@@ -4,12 +4,12 @@
 
 Imagine a 100×100 map of hills. Each cell has a height 0…100.
 
-- **Start A** = left side, middle: (x=0, y=50)
-- **Goal B**  = right side, middle: (x=99, y=50)
+- **Start A** = bottom-left: (x=0, y=0)
+- **Goal B**  = top-right: (x=99, y=99)
 
-You walk cell to cell (up/down/left/right). You pay the **height** of each cell you enter.
+You walk cell to cell (4- or 8-neighbour). You pay **height × step length** of each cell you enter.
 
-**Question:** which path from A to B has the **smallest total height**?
+**Question:** which path from A to B has the **smallest total cost**?
 
 That total is your **J_global** for this toy problem.
 

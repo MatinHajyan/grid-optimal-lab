@@ -6,9 +6,10 @@ STEP 1 — Professor's base problem (no wall, no length limit yet)
 Problem:
   - Map H: 100×100 cells, each with a height 0…100.
   - Start A: bottom-left  → column 0, row 0  (0, 0).
-  - Goal  B: bottom-right → column 99, row 0  (100, 0 on the sketch).
+  - Goal  B: top-right    → column 99, row 99.
   - Move: 4 or 8 neighbors; optional max turn angle (default 45° — no sharp 90° corners).
-  - Objective: minimize SUM of heights along the path (+ optional turn penalty).
+  - Objective: minimize the integral of height over distance travelled, i.e.
+    SUM of (height x step length) (+ optional turn penalty).
 
 Default map: 23 circular hills (professor-style reference terrain).
 
@@ -38,7 +39,7 @@ import numpy as np
 N_COLS = 100
 N_ROWS = 100
 START = (0, 0)    # (col, row) = bottom-left (0, 0)
-GOAL = (99, 99)    # bottom-right — sketch label (100, 0); cols are 0…99
+GOAL = (99, 99)    # (col, row) = top-right; cols and rows are 0…99
 
 RESULTS = Path(__file__).resolve().parent / "results"
 
@@ -117,7 +118,7 @@ def _circular_hill(col: float, row: float, cx: float, cy: float, radius: float) 
 def make_spiral_map() -> np.ndarray:
     """
     Professor-style map: flat floor + round hills with contour rings.
-    Path must weave between the hills from A (left) to B (right).
+    Path must weave between the hills from A (bottom-left) to B (top-right).
     """
     H = np.full((N_ROWS, N_COLS), FLOOR, dtype=float)
     for r in range(N_ROWS):
@@ -125,20 +126,52 @@ def make_spiral_map() -> np.ndarray:
             strength = max(_circular_hill(c, r, cx, cy, rad) for cx, cy, rad in HILLS)
             H[r, c] = FLOOR + strength * (PEAK - FLOOR)
 
-    # Low pads at A and B (corners)
-    for dr in range(4):
-        for dc in range(6):
-            for sc, sr in (START, GOAL):
-                rr, cc = sr + dr, sc + (dc if sc == START[0] else -dc)
+    # Flatten a 4x6 rectangle at each endpoint, growing inward so both
+    # corners get a full pad (the old +row loop ran off the top of the grid).
+    pad_rows, pad_cols = 4, 6
+    for sc, sr in (START, GOAL):
+        row_dir = 1 if sr == 0 else -1
+        col_dir = 1 if sc == 0 else -1
+        for i in range(pad_rows):
+            for j in range(pad_cols):
+                rr = sr + i * row_dir
+                cc = sc + j * col_dir
                 if 0 <= rr < N_ROWS and 0 <= cc < N_COLS:
                     H[rr, cc] = FLOOR
 
     return np.clip(np.round(H), 0, 100).astype(int)
 
 
-def straight_row_cost(H: np.ndarray, row: int) -> float:
-    """Cost of walking the full horizontal row (naive 'just go east')."""
-    return float(H[row, :].sum())
+def naive_diagonal(start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]]:
+    """Straight diagonal from A to B — the 'ignore the hills, go northeast' route."""
+    sc, sr = start
+    gc, gr = goal
+    n = max(abs(gc - sc), abs(gr - sr))
+    if n == 0:
+        return [start]
+    return [
+        (sc + round(i * (gc - sc) / n), sr + round(i * (gr - sr) / n))
+        for i in range(n + 1)
+    ]
+
+
+def step_cost(H: np.ndarray, frm: tuple[int, int], to: tuple[int, int]) -> float:
+    """Cost of one move: height of the entered cell times the distance covered.
+
+    Weighting by distance is what makes a diagonal (length sqrt(2)) cost more
+    than a straight step (length 1); without it the search minimises the number
+    of cells rather than the length of the route.
+    """
+    return float(H[to[1], to[0]]) * math.hypot(to[0] - frm[0], to[1] - frm[1])
+
+
+def path_cost(H: np.ndarray, path: list[tuple[int, int]]) -> float:
+    """Discrete form of the integral of height over distance along a path.
+
+    The start cell contributes nothing: cost is paid on entering a cell, and
+    no distance has been covered yet at the start.
+    """
+    return sum(step_cost(H, path[i - 1], path[i]) for i in range(1, len(path)))
 
 
 def neighbors(
@@ -167,13 +200,14 @@ def dijkstra(
     """
     Minimum-cost path on the grid.
 
-    Cost to enter a cell = its height (+ turn_penalty for sharp turns).
+    Cost of a move = height of the entered cell x distance covered
+    (+ turn_penalty for sharp turns).
     State includes incoming direction so we can limit turn angle.
     """
     sc, sr = start
     gc, gr = goal
     start_state = (sc, sr, NO_PREV[0], NO_PREV[1])
-    dist: dict[tuple[int, int, int, int], float] = {start_state: float(H[sr, sc])}
+    dist: dict[tuple[int, int, int, int], float] = {start_state: 0.0}
     pred: dict[tuple[int, int, int, int], tuple[int, int, int, int] | None] = {
         start_state: None,
     }
@@ -211,7 +245,7 @@ def dijkstra(
             extra = turn_extra(prev, step)
             if math.isinf(extra):
                 continue
-            nd = d + float(H[nr, nc]) + extra
+            nd = d + step_cost(H, (c, r), (nc, nr)) + extra
             nstate = (nc, nr, dc, dr)
             if nd < dist.get(nstate, math.inf):
                 dist[nstate] = nd
@@ -235,8 +269,7 @@ def dijkstra(
         cur = pred.get(cur)
     path.reverse()
 
-    height_cost = sum(float(H[r, c]) for c, r in path)
-    return path, height_cost, frames
+    return path, path_cost(H, path), frames
 
 
 def verify_path(
@@ -250,7 +283,7 @@ def verify_path(
 ) -> bool:
     """Quick sanity checks printed to the terminal."""
     ok = True
-    recomputed = sum(float(H[r, c]) for c, r in path)
+    recomputed = path_cost(H, path)
 
     if path[0] != start or path[-1] != goal:
         print("  [FAIL] Path does not connect A → B.")
@@ -316,7 +349,7 @@ def analyze_forks(
         prev, cur, nxt = path[i - 1], path[i], path[i + 1]
         c_ch, r_ch = nxt
         dc, dr = c_ch - cur[0], r_ch - cur[1]
-        chosen_remain = float(H[r_ch, c_ch]) + _cost_to_goal(H, nxt, goal, cache, search_kw)
+        chosen_remain = step_cost(H, cur, nxt) + _cost_to_goal(H, nxt, goal, cache, search_kw)
 
         for nc, nr, alt_dc, alt_dr in neighbors(
             cur[0], cur[1], n_cols, n_rows, search_kw.get("eight_connected", True),
@@ -324,7 +357,7 @@ def analyze_forks(
             alt = (nc, nr)
             if alt in (prev, nxt):
                 continue
-            alt_remain = float(H[nr, nc]) + _cost_to_goal(H, alt, goal, cache, search_kw)
+            alt_remain = step_cost(H, cur, alt) + _cost_to_goal(H, alt, goal, cache, search_kw)
             if alt_remain <= chosen_remain:
                 continue
 
@@ -364,7 +397,8 @@ def save_proof_report(
         f"Path length: {len(path)} cells",
         "",
         "At each fork below:",
-        "  • chosen_remain = height(next) + cheapest cost from there to goal",
+        "  • chosen_remain = cost of the step into next (height x length)",
+        "                    + cheapest cost from there to goal",
         "  • alt_remain    = same for the other direction",
         "  • If saving > 0, the algorithm's choice is cheaper (proven).",
         "",
@@ -578,6 +612,67 @@ def save_gif(
     imageio.mimsave(out, images, duration=0.12, loop=0)
 
 
+def save_gif_walk(
+    H: np.ndarray,
+    path: list[tuple[int, int]],
+    out: Path,
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    board_style: bool = True,
+):
+    """Animate a single dot walking the finished path, cell by cell."""
+    try:
+        import imageio.v2 as imageio
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("  [skip GIF] install with: pip install imageio")
+        return
+
+    n_rows, n_cols = H.shape
+    cols = [p[0] for p in path]
+    rows = [p[1] for p in path]
+    running = []
+    total = 0.0
+    for c, r in path:
+        total += float(H[r, c])
+        running.append(total)
+
+    fig, ax = plt.subplots(figsize=(9, 9))
+    fig.patch.set_facecolor("white")
+
+    # Background and full route are drawn once; only the dot and trail are
+    # updated per frame, which keeps this far faster than redrawing the map.
+    if board_style:
+        _draw_board_background(ax, H, n_rows, n_cols)
+        _draw_board_markers(ax, start, goal)
+    else:
+        ax.imshow(H, origin="lower", cmap="terrain", aspect="equal", vmin=0, vmax=100)
+        ax.plot(start[0], start[1], "s", color="dodgerblue", ms=10)
+        ax.plot(goal[0], goal[1], "s", color="red", ms=10)
+    ax.plot(cols, rows, color="#90caf9", lw=2.0, alpha=0.5, zorder=4)
+
+    trail, = ax.plot([], [], color="#1565c0", lw=3.0, solid_capstyle="round", zorder=5)
+    dot, = ax.plot([], [], "o", color="#0d3c78", ms=12, zorder=6)
+    title = ax.set_title("", fontsize=12, pad=12)
+
+    images: list[np.ndarray] = []
+    for i in range(len(path)):
+        trail.set_data(cols[: i + 1], rows[: i + 1])
+        dot.set_data([cols[i]], [rows[i]])
+        title.set_text(
+            f"step {i + 1}/{len(path)}   at ({cols[i]}, {rows[i]})   "
+            f"height {int(H[rows[i], cols[i]])}   cost so far {running[i]:.0f}"
+        )
+        fig.canvas.draw()
+        images.append(np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy())
+
+    images.extend([images[-1]] * 10)  # hold on the goal
+    plt.close(fig)
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    imageio.mimsave(out, images, duration=0.08, loop=0)
+
+
 def search_settings(*, sharp_turns: bool = False, max_turn: float = 45.0) -> tuple[dict, str]:
     """Build dijkstra kwargs + human label for a turn mode."""
     if sharp_turns:
@@ -768,6 +863,8 @@ def main():
         help="max turn angle in degrees (default 45 — blocks 90° corners)",
     )
     parser.add_argument("--gif", action="store_true", help="save wavefront GIF")
+    parser.add_argument("--walk", action="store_true",
+                        help="save GIF of a dot walking the final path")
     parser.add_argument("--open", action="store_true", help="open PNG after run (Linux)")
     args = parser.parse_args()
 
@@ -799,7 +896,7 @@ def main():
     print(f"  Start A     : (col,row) = {start}")
     print(f"  Goal B      : (col,row) = {goal}")
     print(f"  Moves       : {move_label}")
-    print(f"  Objective   : minimize sum of heights")
+    print(f"  Objective   : minimize sum of (height x step length)")
     if args.random:
         print(f"  Random seed : {args.seed}")
     else:
@@ -810,12 +907,13 @@ def main():
 
     sharp = count_sharp_turns(path, search_kw.get("max_turn_deg") or 90.0)
     print(f"  Path cells  : {len(path)}")
-    print(f"  Total cost  : {total_cost:.1f}  (sum of cell heights)")
+    print(f"  Total cost  : {total_cost:.1f}  (sum of height x step length)")
     print(f"  Sharp turns : {sharp}  (angles > {search_kw.get('max_turn_deg') or 90:.0f}°)")
     if board_style:
-        naive = straight_row_cost(H, start[1])
-        print(f"  Naive row   : {naive:.1f}  (straight along row {start[1]})")
-        print(f"  Savings     : {naive - total_cost:.1f}  (Dijkstra detours through valleys)")
+        naive_path = naive_diagonal(start, goal)
+        naive = path_cost(H, naive_path)
+        print(f"  Naive diag  : {naive:.1f}  (straight {start} → {goal}, {len(naive_path)} cells)")
+        print(f"  Savings     : {naive - total_cost:.1f}  (Dijkstra weaves around hills)")
     print("  Optimality  : Dijkstra is exact when all step costs >= 0")
     print("=" * 60)
     verify_path(H, path, total_cost, start, goal, eight_connected=search_kw["eight_connected"])
@@ -838,6 +936,11 @@ def main():
         gif = RESULTS / ("step01_spiral.gif" if board_style else "step01_dijkstra.gif")
         save_gif(H, frames, path, gif, start, goal, board_style=board_style)
         print(f"  GIF saved   : {gif}")
+
+    if args.walk:
+        walk = RESULTS / "step01_walk.gif"
+        save_gif_walk(H, path, walk, start, goal, board_style=board_style)
+        print(f"  Walk GIF    : {walk}")
 
     if args.open:
         subprocess.Popen(["xdg-open", str(png)])

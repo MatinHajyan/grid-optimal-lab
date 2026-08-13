@@ -15,7 +15,7 @@ Professor's exercises, **one step at a time**, separate from the hybrid thesis r
 - **Start A:** `(0, 0)` bottom-left.
 - **Goal B:** `(99, 99)` top-right.
 - **Move:** 4- or 8-neighbor; optional max turn angle (default 45°).
-- **Objective:** minimize **sum of cell heights** along the path.
+- **Objective:** minimize **sum of (height × step length)** along the path.
 - **Solver:** Dijkstra (exact optimum for this discrete problem).
 
 Default terrain: **23 circular hills** with contour rings (professor-style reference map).
