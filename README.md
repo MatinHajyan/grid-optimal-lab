@@ -61,15 +61,19 @@ python step03_discretization.py --quick   # fast smoke test
 
 ## Outputs
 
-Generated under `results/` (not committed — recreate with commands above):
+Generated under `results/` (not committed — recreate with commands above).
+Step 1 files go in `results/step_1/` so they match the slides and do not overwrite each other.
 
 | File | Command |
 |------|---------|
-| `step01_spiral.png` | `python step01_base.py` |
-| `step01_compare_turns.png` | `--compare-turns` |
-| `step01_proof.txt` | `--sharp-turns` |
-| `step01_single_hill.png` | `python step01_single_hill.py` |
-| `step01_spiral.gif` | `--gif` |
+| `step_1/step01_spiral.png` | `python step01_base.py` (default 45°) |
+| `step_1/step01_sharp.png` | `--sharp-turns` |
+| `step_1/step01_turn0.png` | `--max-turn 0` |
+| `step_1/step01_compare_turns.png` | `--compare-turns` |
+| `step_1/step01_proof.txt` | `--sharp-turns` |
+| `step_1/step01_single_hill.png` | `python step01_single_hill.py` |
+| `step_1/step01_spiral_walk.gif` | `--walk` |
+| `step_1/step01_spiral.gif` | `--gif` |
 | `step02_ackermann.png` | `python step02_ackermann.py` |
 | `step02_ackermann.gif` | `python step02_ackermann.py --gif` |
 | `step03_discretization.png` | `python step03_discretization.py` |

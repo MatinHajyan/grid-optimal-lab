@@ -22,7 +22,7 @@ CONTOUR_LEVELS = [20, 35, 50, 65, 80, 90]
 # One hill: (center_col, center_row, radius)
 SINGLE_HILL = (50, 50, 12)
 
-RESULTS = Path(__file__).resolve().parent / "results"
+RESULTS = Path(__file__).resolve().parent / "results" / "step_1"
 
 
 def circular_hill(col: float, row: float, cx: float, cy: float, radius: float) -> float:

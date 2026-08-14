@@ -42,6 +42,7 @@ START = (0, 0)    # (col, row) = bottom-left (0, 0)
 GOAL = (99, 99)    # (col, row) = top-right; cols and rows are 0…99
 
 RESULTS = Path(__file__).resolve().parent / "results"
+STEP1_RESULTS = RESULTS / "step_1"
 
 # Staggered hills in 5 rows — no straight corridor at row 50.
 # Each entry: (center_col, center_row, radius)
@@ -71,6 +72,24 @@ NO_PREV = (0, 0)  # sentinel: no incoming direction yet (at start)
 
 def _step_moves(eight_connected: bool) -> tuple[tuple[int, int], ...]:
     return MOVES_8 if eight_connected else MOVES_4
+
+
+def step1_out(name: str) -> Path:
+    """Write Step 1 artifacts under results/step_1/ (matches the slides)."""
+    STEP1_RESULTS.mkdir(parents=True, exist_ok=True)
+    return STEP1_RESULTS / name
+
+
+def step1_run_tag(*, sharp_turns: bool, max_turn: float, random: bool, seed: int) -> str:
+    """Unique filename tag so turn modes do not overwrite each other."""
+    if random:
+        return f"random{seed}"
+    if sharp_turns:
+        return "sharp"
+    if abs(max_turn - 45.0) < 1e-9:
+        return "spiral"  # default run keeps the familiar name
+    t = int(max_turn) if float(max_turn) == int(max_turn) else max_turn
+    return f"turn{t}"
 
 
 def _turn_angle_deg(prev: tuple[int, int], new: tuple[int, int]) -> float:
@@ -269,7 +288,24 @@ def dijkstra(
         cur = pred.get(cur)
     path.reverse()
 
-    return path, path_cost(H, path), frames
+    return path, dist[best_state], frames
+
+
+def path_turn_penalty(
+    path: list[tuple[int, int]],
+    turn_penalty: float,
+) -> float:
+    """Soft turn extras along a finished path (same formula as the search)."""
+    if turn_penalty <= 0 or len(path) < 3:
+        return 0.0
+    extra = 0.0
+    for i in range(2, len(path)):
+        prev = (path[i - 1][0] - path[i - 2][0], path[i - 1][1] - path[i - 2][1])
+        step = (path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
+        angle = _turn_angle_deg(prev, step)
+        if angle > 1e-6:
+            extra += turn_penalty * (angle / 90.0)
+    return extra
 
 
 def verify_path(
@@ -280,11 +316,16 @@ def verify_path(
     goal: tuple[int, int],
     *,
     eight_connected: bool = True,
+    max_turn_deg: float | None = None,
+    turn_penalty: float = 0.0,
 ) -> bool:
-    """Quick sanity checks printed to the terminal."""
+    """Sanity checks: connectivity, legal steps, turn limit, cost."""
     ok = True
-    recomputed = path_cost(H, path)
+    recomputed = path_cost(H, path) + path_turn_penalty(path, turn_penalty)
 
+    if not path:
+        print("  [FAIL] Empty path.")
+        return False
     if path[0] != start or path[-1] != goal:
         print("  [FAIL] Path does not connect A → B.")
         ok = False
@@ -300,6 +341,11 @@ def verify_path(
             print(f"  [FAIL] Diagonal move at step {i} (4-neighbor mode).")
             ok = False
             break
+    if max_turn_deg is not None:
+        nsharp = count_sharp_turns(path, max_turn_deg)
+        if nsharp:
+            print(f"  [FAIL] {nsharp} turns sharper than {max_turn_deg:.0f}°.")
+            ok = False
     if abs(recomputed - reported_cost) > 1e-6:
         print(f"  [FAIL] Cost mismatch: {recomputed:.1f} vs {reported_cost:.1f}")
         ok = False
@@ -722,7 +768,8 @@ def run_turn_comparison(
         }
         try:
             path, cost, _ = dijkstra(H, start, goal, **search_kw)
-            threshold = search_kw.get("max_turn_deg") or 90.0
+            limit = search_kw.get("max_turn_deg")
+            threshold = 90.0 if limit is None else limit
             sharp = count_sharp_turns(path, threshold)
             row.update(path=path, cost=cost, cells=len(path), sharp=sharp)
             print(f"  cells={len(path)}  cost={cost:.1f}  sharp_turns={sharp}")
@@ -820,7 +867,7 @@ def compare_turns_main(open_after: bool = False) -> None:
 
     results = run_turn_comparison(H, start, goal)
 
-    compare_dir = RESULTS / "compare_turns"
+    compare_dir = step1_out("compare_turns")
     compare_dir.mkdir(parents=True, exist_ok=True)
     for r in results:
         if r["path"] is None:
@@ -830,10 +877,10 @@ def compare_turns_main(open_after: bool = False) -> None:
             start, goal, board_style=True,
         )
 
-    combined = RESULTS / "step01_compare_turns.png"
+    combined = step1_out("step01_compare_turns.png")
     plot_turn_comparison(H, results, start, goal, combined)
 
-    report = RESULTS / "step01_compare_turns.txt"
+    report = step1_out("step01_compare_turns.txt")
     save_turn_comparison_report(results, start, goal, report)
 
     print("\n" + "=" * 60)
@@ -878,16 +925,22 @@ def main():
         search_kw, move_label = search_settings(max_turn=args.max_turn)
 
     start, goal = START, GOAL
+    tag = step1_run_tag(
+        sharp_turns=args.sharp_turns,
+        max_turn=args.max_turn,
+        random=args.random,
+        seed=args.seed,
+    )
     if args.random:
         H = make_height_map(args.seed)
         title = "STEP 1 — random mountain grid"
         board_style = False
-        png = RESULTS / "step01_path.png"
+        png = step1_out(f"step01_{tag}.png")
     else:
         H = make_spiral_map()
         title = "STEP 1 — reference hill map"
         board_style = True
-        png = RESULTS / "step01_spiral.png"
+        png = step1_out(f"step01_{tag}.png")
 
     print("=" * 60)
     print(title)
@@ -905,10 +958,12 @@ def main():
 
     path, total_cost, frames = dijkstra(H, start, goal, **search_kw)
 
-    sharp = count_sharp_turns(path, search_kw.get("max_turn_deg") or 90.0)
+    limit = search_kw.get("max_turn_deg")
+    threshold = 90.0 if limit is None else limit
+    sharp = count_sharp_turns(path, threshold)
     print(f"  Path cells  : {len(path)}")
     print(f"  Total cost  : {total_cost:.1f}  (sum of height x step length)")
-    print(f"  Sharp turns : {sharp}  (angles > {search_kw.get('max_turn_deg') or 90:.0f}°)")
+    print(f"  Sharp turns : {sharp}  (angles > {threshold:.0f}°)")
     if board_style:
         naive_path = naive_diagonal(start, goal)
         naive = path_cost(H, naive_path)
@@ -916,13 +971,18 @@ def main():
         print(f"  Savings     : {naive - total_cost:.1f}  (Dijkstra weaves around hills)")
     print("  Optimality  : Dijkstra is exact when all step costs >= 0")
     print("=" * 60)
-    verify_path(H, path, total_cost, start, goal, eight_connected=search_kw["eight_connected"])
+    verify_path(
+        H, path, total_cost, start, goal,
+        eight_connected=search_kw["eight_connected"],
+        max_turn_deg=search_kw.get("max_turn_deg"),
+        turn_penalty=search_kw.get("turn_penalty", 0.0),
+    )
 
     forks: list[dict] = []
     if board_style and args.sharp_turns:
         print("  Analyzing fork points…")
         forks = analyze_forks(H, path, goal, search_kw)
-        proof = RESULTS / "step01_proof.txt"
+        proof = step1_out("step01_proof.txt")
         save_proof_report(forks, total_cost, path, proof)
         print(f"  Proof saved : {proof}")
     elif board_style:
@@ -933,12 +993,12 @@ def main():
     print(f"  PNG saved   : {png}")
 
     if args.gif:
-        gif = RESULTS / ("step01_spiral.gif" if board_style else "step01_dijkstra.gif")
+        gif = step1_out(f"step01_{tag}.gif")
         save_gif(H, frames, path, gif, start, goal, board_style=board_style)
         print(f"  GIF saved   : {gif}")
 
     if args.walk:
-        walk = RESULTS / "step01_walk.gif"
+        walk = step1_out(f"step01_{tag}_walk.gif")
         save_gif_walk(H, path, walk, start, goal, board_style=board_style)
         print(f"  Walk GIF    : {walk}")
 

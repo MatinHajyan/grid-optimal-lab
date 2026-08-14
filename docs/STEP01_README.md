@@ -18,7 +18,7 @@ That total is your **J_global** for this toy problem.
 | File | Role |
 |------|------|
 | `step01_base.py` | Builds H, runs Dijkstra, saves plot |
-| `results/step01_path.png` | Output picture |
+| `results/step_1/step01_spiral.png` | Default 45° path picture |
 
 ## Commands
 
